@@ -3,38 +3,17 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>AR.js (Hiro) – Letterbox statt Zoom</title>
+    <title>AR.js (Hiro) – Zoom Fix</title>
 
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js/aframe/build/aframe-ar.js"></script>
 
     <style>
       html, body { margin: 0; height: 100%; overflow: hidden; background: #000; }
-
-      /* AR.js setzt beim Resize Inline-Styles (width/height/margins). Mit !important überschreiben. */
-      #arjs-video {
-        width: 100% !important;
-        height: 100% !important;
-        left: 0 !important;
-        top: 0 !important;
-        margin-left: 0 !important;
-        margin-top: 0 !important;
-        object-fit: contain !important; /* <-- key: no crop, may add black bars */
-      }
-
-      /* Canvas ebenfalls “sauber” auf Fullscreen halten */
-      .a-canvas {
-        width: 100% !important;
-        height: 100% !important;
-        left: 0 !important;
-        top: 0 !important;
-      }
-
       #hud {
-        position: fixed; top: 0; left: 0; right: 0;
-        padding: 10px; z-index: 9999;
-        background: rgba(0,0,0,.6); color: #fff;
-        font: 14px system-ui;
+        position: fixed; top: 0; left: 0; right: 0; padding: 10px;
+        background: rgba(0,0,0,.65); color: #fff; font: 14px system-ui;
+        z-index: 9999;
       }
     </style>
   </head>
@@ -46,9 +25,7 @@
       embedded
       vr-mode-ui="enabled:false"
       renderer="colorManagement: true;"
-      arjs="sourceType: webcam; debugUIEnabled: false;
-            sourceWidth: 1280; sourceHeight: 720;
-            displayWidth: 1280; displayHeight: 720;"
+      arjs="sourceType: webcam; facingMode: environment; debugUIEnabled: false;"
     >
       <a-entity light="type: ambient; intensity: 1"></a-entity>
       <a-entity light="type: directional; intensity: 0.8" position="1 2 1"></a-entity>
@@ -71,6 +48,45 @@
 
       marker.addEventListener("markerFound", () => (hud.textContent = "Status: Hiro erkannt ✅"));
       marker.addEventListener("markerLost",  () => (hud.textContent = "Status: Hiro nicht im Bild…"));
+
+      async function tryForceZoomOut() {
+        // Wait a bit until AR.js has created the video element and started the stream
+        await new Promise(r => setTimeout(r, 800));
+
+        const video = document.getElementById("arjs-video") || document.querySelector("video");
+        if (!video || !video.srcObject) {
+          hud.textContent = "Status: Video-Stream nicht gefunden (noch nicht gestartet?)";
+          return;
+        }
+
+        const track = video.srcObject.getVideoTracks?.()[0];
+        if (!track || !track.getCapabilities || !track.applyConstraints) {
+          hud.textContent = "Status: Track/Capabilities nicht verfügbar (Browser/Device-Limit)";
+          return;
+        }
+
+        const caps = track.getCapabilities();
+        const settings = track.getSettings ? track.getSettings() : {};
+
+        // Zoom is a standard constrainable property (if supported by the device/browser).
+        // We'll try to set it to the minimum.
+        if (caps && caps.zoom) {
+          try {
+            const minZoom = (typeof caps.zoom.min === "number") ? caps.zoom.min : 1;
+            await track.applyConstraints({ advanced: [{ zoom: minZoom }] });
+            const after = track.getSettings ? track.getSettings() : {};
+            hud.textContent = `Status: Zoom-Fix versucht ✅ (zoom vorher: ${settings.zoom ?? "?"}, nachher: ${after.zoom ?? "?"})`;
+          } catch (e) {
+            console.error(e);
+            hud.textContent = "Status: Zoom-Fix fehlgeschlagen (Device ignoriert zoom-Constraint)";
+          }
+        } else {
+          hud.textContent = "Status: Dieses Gerät meldet keine Zoom-Capability (kann nicht erzwingen)";
+        }
+      }
+
+      // Run once after load
+      window.addEventListener("load", () => { tryForceZoomOut(); });
     </script>
   </body>
 </html>
