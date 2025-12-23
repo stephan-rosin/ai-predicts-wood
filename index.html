@@ -1,77 +1,17 @@
-<!doctype html>
-<html lang="de">
+<html>
   <head>
-    <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>MindAR Debug</title>
-
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
-
-    <style>
-      html, body { margin: 0; height: 100%; overflow: hidden; background: #000; }
-      #hud{
-        position: fixed; top: 0; left: 0; right: 0; z-index: 9999;
-        padding: 10px; background: rgba(0,0,0,.65); color: #fff;
-        font: 14px system-ui, sans-serif; white-space: pre-line;
-      }
-    </style>
   </head>
-
   <body>
-    <div id="hud">Boot…</div>
-
-    <a-scene
-      id="scene"
-      mindar-image="imageTargetSrc: ./targets.mind;"
-      color-space="sRGB"
-      renderer="colorManagement: true, physicallyCorrectLights"
-      vr-mode-ui="enabled: false"
-      device-orientation-permission-ui="enabled: false"
-    >
-      <a-assets>
-        <a-asset-item id="m" src="./model.glb"></a-asset-item>
-      </a-assets>
-
+    <a-scene mindar-image="imageTargetSrc: https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/card.mind;"
+             vr-mode-ui="enabled: false"
+             device-orientation-permission-ui="enabled: false">
       <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
-
-      <a-entity id="t0" mindar-image-target="targetIndex: 0">
-        <!-- Debug-Plane: muss erscheinen wenn Target erkannt wird -->
-        <a-plane color="blue" opacity="0.6" position="0 0 0" height="0.552" width="1"></a-plane>
-
-        <!-- Dein Modell -->
-        <a-gltf-model id="model" src="#m" position="0 0 0.1" scale="0.2 0.2 0.2"></a-gltf-model>
+      <a-entity mindar-image-target="targetIndex: 0">
+        <a-plane color="blue" opacity="0.5" position="0 0 0" height="0.552" width="1"></a-plane>
       </a-entity>
     </a-scene>
-
-    <script>
-      const hud = document.getElementById("hud");
-
-      function setHUD(lines) { hud.textContent = lines.join("\n"); }
-
-      window.addEventListener("load", () => {
-        const scene = document.getElementById("scene");
-        const t0 = document.getElementById("t0");
-        const model = document.getElementById("model");
-
-        const s = { ar: "waiting…", target: "not seen", model: "loading…" };
-        const render = () => setHUD([
-          `AR: ${s.ar}`,
-          `Target: ${s.target}`,
-          `Model: ${s.model}`
-        ]);
-
-        render();
-
-        scene.addEventListener("arReady", () => { s.ar = "ready ✅"; console.log("[MindAR] arReady"); render(); });
-        scene.addEventListener("arError", (e) => { s.ar = "error ❌ (console)"; console.error("[MindAR] arError", e); render(); });
-
-        t0.addEventListener("targetFound", () => { s.target = "FOUND ✅"; console.log("[MindAR] targetFound"); render(); });
-        t0.addEventListener("targetLost",  () => { s.target = "lost…"; console.log("[MindAR] targetLost"); render(); });
-
-        model.addEventListener("model-loaded", () => { s.model = "loaded ✅"; console.log("[A-Frame] model-loaded"); render(); });
-        model.addEventListener("model-error",  (e) => { s.model = "error ❌ (console)"; console.error("[A-Frame] model-error", e); render(); });
-      });
-    </script>
   </body>
 </html>
