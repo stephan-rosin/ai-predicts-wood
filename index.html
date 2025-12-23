@@ -2,58 +2,68 @@
 <html lang="de">
   <head>
     <meta charset="utf-8" />
-    <meta
-      name="viewport"
-      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"
-    />
-    <title>Marker AR Demo</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Marker AR Debug</title>
 
-    <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
-    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js/aframe/build/aframe-ar.js"></script>
 
     <style>
-      html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; }
-
-      /* AR.js injects a <video>. Force it to not crop/zoom. */
-      video {
-        object-fit: contain !important;
-      }
+      html, body { margin: 0; height: 100%; overflow: hidden; }
+      #hud { position: fixed; top: 0; left: 0; right: 0; padding: 8px; background: rgba(0,0,0,.6); color: #fff; font: 14px system-ui; z-index: 9999; }
     </style>
   </head>
 
   <body>
+    <div id="hud">Lade… (wenn Marker erkannt wird, sollte die Box erscheinen)</div>
+
     <a-scene
       embedded
       vr-mode-ui="enabled: false"
       renderer="colorManagement: true;"
-      arjs="
-        sourceType: webcam;
-        debugUIEnabled: false;
-        sourceWidth: 1280;
-        sourceHeight: 720;
-        displayWidth: 1280;
-        displayHeight: 720;
-        canvasWidth: 1280;
-        canvasHeight: 720;
-      "
+      arjs="sourceType: webcam; debugUIEnabled: false;"
     >
-      <a-marker
-        type="pattern"
-        url="marker.patt"
-        smooth="true"
-        smoothCount="5"
-        smoothTolerance="0.01"
-        smoothThreshold="2"
-      >
+      <!-- Light (helps if the model looks "invisible/black") -->
+      <a-entity light="type: ambient; intensity: 1"></a-entity>
+      <a-entity light="type: directional; intensity: 0.8" position="1 2 1"></a-entity>
+
+      <a-assets>
+        <a-asset-item id="m" src="model.glb"></a-asset-item>
+      </a-assets>
+
+      <a-marker id="mk" type="pattern" url="marker.patt">
+        <!-- Should always be visible when marker is detected -->
+        <a-box depth="0.2" height="0.2" width="0.2" position="0 0.1 0"></a-box>
+
         <a-entity
-          gltf-model="url(model.glb)"
+          id="model"
+          gltf-model="#m"
           position="0 0 0"
           rotation="0 0 0"
-          scale="1 1 1"
+          scale="0.1 0.1 0.1"
         ></a-entity>
       </a-marker>
 
       <a-entity camera></a-entity>
     </a-scene>
+
+    <script>
+      const hud = document.getElementById('hud');
+      const marker = document.getElementById('mk');
+      const model = document.getElementById('model');
+
+      marker.addEventListener('markerFound', () => hud.textContent = 'Marker erkannt ✅');
+      marker.addEventListener('markerLost',  () => hud.textContent = 'Marker nicht im Bild…');
+
+      model.addEventListener('model-loaded', () => {
+        hud.textContent = (hud.textContent + ' | Modell geladen ✅');
+        console.log('model-loaded');
+      });
+
+      model.addEventListener('model-error', (e) => {
+        hud.textContent = (hud.textContent + ' | Modell-Fehler ❌ (Console öffnen)');
+        console.error('model-error', e);
+      });
+    </script>
   </body>
 </html>
