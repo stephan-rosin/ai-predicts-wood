@@ -3,197 +3,39 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>AR.js – Kamera wählen (Hiro)</title>
+    <title>MindAR Image Tracking</title>
 
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js/aframe/build/aframe-ar.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
 
     <style>
-      html, body { margin: 0; height: 100%; overflow: hidden; background: #000; font-family: system-ui, sans-serif; }
-      #ui {
-        position: fixed; inset: 0; display: grid; place-items: center;
-        background: rgba(0,0,0,0.85); color: #fff; z-index: 9999; padding: 18px;
-      }
-      #panel {
-        width: min(560px, 92vw);
-        border: 1px solid rgba(255,255,255,0.15);
-        border-radius: 14px;
-        padding: 16px;
-        background: rgba(255,255,255,0.06);
-      }
-      #panel h1 { font-size: 18px; margin: 0 0 10px; }
-      #panel p { font-size: 14px; opacity: 0.9; line-height: 1.35; margin: 8px 0; }
-      #row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
-      button, select { font-size: 14px; padding: 10px 12px; border-radius: 10px; border: 0; }
-      button { cursor: pointer; }
-      select { flex: 1; min-width: 240px; }
-      #hud {
-        position: fixed; top: 0; left: 0; right: 0;
-        padding: 10px; z-index: 9998;
-        background: rgba(0,0,0,.65); color: #fff; font: 14px system-ui;
-      }
-      #ar { width: 100vw; height: 100vh; }
+      html, body { margin: 0; height: 100%; overflow: hidden; background: #000; }
     </style>
   </head>
 
   <body>
-    <div id="hud">Status: bereit…</div>
+    <a-scene
+      mindar-image="imageTargetSrc: target.mind;"
+      color-space="sRGB"
+      renderer="colorManagement: true, physicallyCorrectLights"
+      vr-mode-ui="enabled: false"
+      device-orientation-permission-ui="enabled: false"
+    >
+      <a-assets>
+        <a-asset-item id="m" src="model.glb"></a-asset-item>
+      </a-assets>
 
-    <div id="ui">
-      <div id="panel">
-        <h1>AR starten</h1>
-        <p>
-          Tipp: Wähle (falls vorhanden) die <b>Ultraweitwinkel/Wide</b>-Rückkamera. Beim Edge 30 Fusion wirkt die Hauptkamera oft “zu nah”.
-        </p>
+      <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
-        <div id="row">
-          <button id="btnPerm">Kamera erlauben</button>
-          <select id="camSelect" disabled>
-            <option>Erst Kamera erlauben…</option>
-          </select>
-          <button id="btnStart" disabled>AR starten</button>
-        </div>
-
-        <p id="status"></p>
-      </div>
-    </div>
-
-    <div id="ar"></div>
-
-    <script>
-      const hud = document.getElementById("hud");
-      const statusEl = document.getElementById("status");
-      const btnPerm = document.getElementById("btnPerm");
-      const btnStart = document.getElementById("btnStart");
-      const camSelect = document.getElementById("camSelect");
-      const ui = document.getElementById("ui");
-      const arDiv = document.getElementById("ar");
-
-      let selectedDeviceId = null;
-
-      // Patch getUserMedia so AR.js uses our chosen camera + asks for minimal zoom if possible.
-      const originalGUM = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
-      navigator.mediaDevices.getUserMedia = async (constraints) => {
-        if (constraints && constraints.video) {
-          const v = (typeof constraints.video === "boolean") ? {} : constraints.video;
-
-          // Force our selected camera if set
-          if (selectedDeviceId) {
-            v.deviceId = { exact: selectedDeviceId };
-          }
-
-          // Prefer environment-facing
-          v.facingMode = v.facingMode || "environment";
-
-          // Reasonable 16:9 request (doesn't guarantee, but helps)
-          v.width = v.width || { ideal: 1280 };
-          v.height = v.height || { ideal: 720 };
-
-          // Ask for zoom-out via advanced constraints (some devices ignore this)
-          v.advanced = v.advanced || [];
-          v.advanced.push({ zoom: 1 });
-
-          constraints = { ...constraints, video: v };
-        }
-        return originalGUM(constraints);
-      };
-
-      async function requestPermissionAndListCameras() {
-        hud.textContent = "Status: frage Permission an…";
-
-        // 1) request once so labels become visible
-        const tmp = await originalGUM({ video: { facingMode: "environment" }, audio: false });
-        tmp.getTracks().forEach(t => t.stop());
-
-        // 2) list devices
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        const cams = devices.filter(d => d.kind === "videoinput");
-
-        camSelect.innerHTML = "";
-        cams.forEach((c, i) => {
-          const opt = document.createElement("option");
-          opt.value = c.deviceId;
-          opt.textContent = c.label || `Kamera ${i + 1}`;
-          camSelect.appendChild(opt);
-        });
-
-        camSelect.disabled = cams.length === 0;
-        btnStart.disabled = cams.length === 0;
-
-        // 3) auto-pick a likely wide/ultrawide back camera if label hints exist
-        const preferred = cams.find(c => /ultra|wide|0\.6|0,6|uw|super/i.test(c.label || ""));
-        if (preferred) camSelect.value = preferred.deviceId;
-
-        selectedDeviceId = camSelect.value;
-
-        statusEl.textContent = cams.length
-          ? "Kameras geladen. Wenn es noch zoomig ist: im Dropdown eine andere Rückkamera probieren."
-          : "Keine Kameras gefunden.";
-        hud.textContent = "Status: Kameraauswahl bereit.";
-      }
-
-      async function tryZoomOutAfterStart() {
-        // After AR.js starts, try applying zoom constraint directly to the active track
-        await new Promise(r => setTimeout(r, 900));
-        const video = document.getElementById("arjs-video") || document.querySelector("video");
-        const track = video?.srcObject?.getVideoTracks?.()[0];
-        if (!track?.getCapabilities || !track.applyConstraints) return;
-
-        const caps = track.getCapabilities();
-        if (!caps.zoom) return;
-
-        const minZoom = (typeof caps.zoom.min === "number") ? caps.zoom.min : 1;
-        try {
-          await track.applyConstraints({ advanced: [{ zoom: minZoom }] });
-          const after = track.getSettings ? track.getSettings() : {};
-          hud.textContent = `Status: AR läuft (Zoom gesetzt auf ${after.zoom ?? minZoom}).`;
-        } catch (_) {
-          hud.textContent = "Status: AR läuft (Zoom-Constraint wurde ignoriert).";
-        }
-      }
-
-      function startAR() {
-        selectedDeviceId = camSelect.value;
-
-        arDiv.innerHTML = `
-          <a-scene embedded vr-mode-ui="enabled:false"
-                   renderer="colorManagement:true;"
-                   arjs="sourceType:webcam; debugUIEnabled:false;">
-            <a-entity light="type:ambient; intensity:1"></a-entity>
-            <a-entity light="type:directional; intensity:0.8" position="1 2 1"></a-entity>
-
-            <a-assets>
-              <a-asset-item id="m" src="model.glb"></a-asset-item>
-            </a-assets>
-
-            <a-marker id="mk" preset="hiro" emitevents="true">
-              <a-box depth="0.4" height="0.4" width="0.4" position="0 0.2 0"></a-box>
-              <a-entity gltf-model="#m" position="0 0.05 0" scale="0.2 0.2 0.2"></a-entity>
-            </a-marker>
-
-            <a-entity camera></a-entity>
-          </a-scene>
-        `;
-
-        ui.style.display = "none";
-        hud.textContent = "Status: AR gestartet… Marker zeigen.";
-        tryZoomOutAfterStart();
-      }
-
-      btnPerm.addEventListener("click", async () => {
-        try {
-          await requestPermissionAndListCameras();
-        } catch (e) {
-          console.error(e);
-          hud.textContent = "Status: Permission fehlgeschlagen (HTTPS? Browser?).";
-        }
-      });
-
-      camSelect.addEventListener("change", () => {
-        selectedDeviceId = camSelect.value;
-      });
-
-      btnStart.addEventListener("click", () => startAR());
-    </script>
+      <!-- Content anchored to targetIndex 0 -->
+      <a-entity mindar-image-target="targetIndex: 0">
+        <a-gltf-model
+          src="#m"
+          position="0 0 0.1"
+          rotation="0 0 0"
+          scale="0.2 0.2 0.2"
+        ></a-gltf-model>
+      </a-entity>
+    </a-scene>
   </body>
 </html>
