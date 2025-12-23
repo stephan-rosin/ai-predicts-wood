@@ -3,24 +3,17 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>MindAR – Image Tracking Debug</title>
+    <title>MindAR Debug</title>
 
-    <!-- Standard MindAR (A-Frame) includes -->
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
 
     <style>
       html, body { margin: 0; height: 100%; overflow: hidden; background: #000; }
-      #hud {
-        position: fixed;
-        top: 0; left: 0; right: 0;
-        padding: 10px;
-        background: rgba(0,0,0,.65);
-        color: #fff;
-        font: 14px system-ui, sans-serif;
-        z-index: 9999;
-        line-height: 1.35;
-        white-space: pre-line;
+      #hud{
+        position: fixed; top: 0; left: 0; right: 0; z-index: 9999;
+        padding: 10px; background: rgba(0,0,0,.65); color: #fff;
+        font: 14px system-ui, sans-serif; white-space: pre-line;
       }
     </style>
   </head>
@@ -28,108 +21,56 @@
   <body>
     <div id="hud">Boot…</div>
 
-    <!-- Put these files next to this index.html:
-         - targets.mind  (or target.mind, just match the filename below)
-         - model.glb
-    -->
     <a-scene
       id="scene"
-      mindar-image="imageTargetSrc: targets.mind;"
+      mindar-image="imageTargetSrc: ./targets.mind;"
       color-space="sRGB"
       renderer="colorManagement: true, physicallyCorrectLights"
       vr-mode-ui="enabled: false"
       device-orientation-permission-ui="enabled: false"
     >
       <a-assets>
-        <a-asset-item id="modelAsset" src="model.glb"></a-asset-item>
+        <a-asset-item id="m" src="./model.glb"></a-asset-item>
       </a-assets>
 
       <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
-      <!-- Everything inside is anchored to targetIndex 0 -->
-      <a-entity id="target" mindar-image-target="targetIndex: 0">
-        <!-- Debug reference object (should appear when target is found) -->
-        <a-box depth="0.2" height="0.2" width="0.2" position="0 0 0"></a-box>
+      <a-entity id="t0" mindar-image-target="targetIndex: 0">
+        <!-- Debug-Plane: muss erscheinen wenn Target erkannt wird -->
+        <a-plane color="blue" opacity="0.6" position="0 0 0" height="0.552" width="1"></a-plane>
 
-        <!-- Your model -->
-        <a-gltf-model
-          id="model"
-          src="#modelAsset"
-          position="0 0 0.1"
-          rotation="0 0 0"
-          scale="0.2 0.2 0.2"
-        ></a-gltf-model>
+        <!-- Dein Modell -->
+        <a-gltf-model id="model" src="#m" position="0 0 0.1" scale="0.2 0.2 0.2"></a-gltf-model>
       </a-entity>
     </a-scene>
 
     <script>
       const hud = document.getElementById("hud");
 
-      function setHud(lines) {
-        hud.textContent = lines.join("\n");
-      }
+      function setHUD(lines) { hud.textContent = lines.join("\n"); }
 
       window.addEventListener("load", () => {
         const scene = document.getElementById("scene");
-        const target = document.getElementById("target");
+        const t0 = document.getElementById("t0");
         const model = document.getElementById("model");
 
-        const state = {
-          page: "loaded",
-          ar: "waiting…",
-          target: "not seen",
-          model: "loading…"
-        };
-
-        function render() {
-          setHud([
-            `Page: ${state.page}`,
-            `AR: ${state.ar}`,
-            `Target: ${state.target}`,
-            `Model: ${state.model}`
-          ]);
-        }
+        const s = { ar: "waiting…", target: "not seen", model: "loading…" };
+        const render = () => setHUD([
+          `AR: ${s.ar}`,
+          `Target: ${s.target}`,
+          `Model: ${s.model}`
+        ]);
 
         render();
 
-        // MindAR scene events (debug)
-        scene.addEventListener("arReady", () => {
-          state.ar = "ready ✅";
-          console.log("[MindAR] arReady");
-          render();
-        });
+        scene.addEventListener("arReady", () => { s.ar = "ready ✅"; console.log("[MindAR] arReady"); render(); });
+        scene.addEventListener("arError", (e) => { s.ar = "error ❌ (console)"; console.error("[MindAR] arError", e); render(); });
 
-        scene.addEventListener("arError", (e) => {
-          state.ar = "error ❌ (see console)";
-          console.error("[MindAR] arError", e);
-          render();
-        });
+        t0.addEventListener("targetFound", () => { s.target = "FOUND ✅"; console.log("[MindAR] targetFound"); render(); });
+        t0.addEventListener("targetLost",  () => { s.target = "lost…"; console.log("[MindAR] targetLost"); render(); });
 
-        // Target found/lost events
-        target.addEventListener("targetFound", () => {
-          state.target = "FOUND ✅";
-          console.log("[MindAR] targetFound");
-          render();
-        });
-
-        target.addEventListener("targetLost", () => {
-          state.target = "lost…";
-          console.log("[MindAR] targetLost");
-          render();
-        });
-
-        // Model load events (A-Frame glTF)
-        model.addEventListener("model-loaded", () => {
-          state.model = "loaded ✅";
-          console.log("[A-Frame] model-loaded");
-          render();
-        });
-
-        model.addEventListener("model-error", (e) => {
-          state.model = "error ❌ (see console)";
-          console.error("[A-Frame] model-error", e);
-          render();
-        });
+        model.addEventListener("model-loaded", () => { s.model = "loaded ✅"; console.log("[A-Frame] model-loaded"); render(); });
+        model.addEventListener("model-error",  (e) => { s.model = "error ❌ (console)"; console.error("[A-Frame] model-error", e); render(); });
       });
     </script>
   </body>
