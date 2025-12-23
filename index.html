@@ -3,27 +3,33 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Marker AR Debug</title>
+    <title>AR.js Debug (Hiro)</title>
 
+    <!-- A-Frame -->
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+
+    <!-- AR.js for A-Frame -->
     <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js/aframe/build/aframe-ar.js"></script>
 
     <style>
       html, body { margin: 0; height: 100%; overflow: hidden; }
-      #hud { position: fixed; top: 0; left: 0; right: 0; padding: 8px; background: rgba(0,0,0,.6); color: #fff; font: 14px system-ui; z-index: 9999; }
+      #hud {
+        position: fixed; top: 0; left: 0; right: 0; padding: 10px;
+        background: rgba(0,0,0,.65); color: #fff; font: 14px system-ui;
+        z-index: 9999;
+      }
     </style>
   </head>
 
   <body>
-    <div id="hud">Lade… (wenn Marker erkannt wird, sollte die Box erscheinen)</div>
+    <div id="hud">Status: Seite geladen…</div>
 
     <a-scene
       embedded
-      vr-mode-ui="enabled: false"
+      vr-mode-ui="enabled:false"
       renderer="colorManagement: true;"
-      arjs="sourceType: webcam; debugUIEnabled: false;"
+      arjs="sourceType: webcam; debugUIEnabled: true;"
     >
-      <!-- Light (helps if the model looks "invisible/black") -->
       <a-entity light="type: ambient; intensity: 1"></a-entity>
       <a-entity light="type: directional; intensity: 0.8" position="1 2 1"></a-entity>
 
@@ -31,16 +37,17 @@
         <a-asset-item id="m" src="model.glb"></a-asset-item>
       </a-assets>
 
-      <a-marker id="mk" type="pattern" url="marker.patt">
-        <!-- Should always be visible when marker is detected -->
-        <a-box depth="0.2" height="0.2" width="0.2" position="0 0.1 0"></a-box>
+      <!-- Hiro preset marker -->
+      <a-marker id="mk" preset="hiro" emitevents="true">
+        <!-- Big box: must appear when marker is detected -->
+        <a-box depth="0.6" height="0.6" width="0.6" position="0 0.3 0"></a-box>
 
         <a-entity
           id="model"
           gltf-model="#m"
           position="0 0 0"
           rotation="0 0 0"
-          scale="0.1 0.1 0.1"
+          scale="1 1 1"
         ></a-entity>
       </a-marker>
 
@@ -48,22 +55,15 @@
     </a-scene>
 
     <script>
-      const hud = document.getElementById('hud');
-      const marker = document.getElementById('mk');
-      const model = document.getElementById('model');
+      const hud = document.getElementById("hud");
+      const marker = document.getElementById("mk");
+      const model = document.getElementById("model");
 
-      marker.addEventListener('markerFound', () => hud.textContent = 'Marker erkannt ✅');
-      marker.addEventListener('markerLost',  () => hud.textContent = 'Marker nicht im Bild…');
+      marker.addEventListener("markerFound", () => hud.textContent = "Status: Hiro erkannt ✅");
+      marker.addEventListener("markerLost",  () => hud.textContent = "Status: Hiro nicht im Bild…");
 
-      model.addEventListener('model-loaded', () => {
-        hud.textContent = (hud.textContent + ' | Modell geladen ✅');
-        console.log('model-loaded');
-      });
-
-      model.addEventListener('model-error', (e) => {
-        hud.textContent = (hud.textContent + ' | Modell-Fehler ❌ (Console öffnen)');
-        console.error('model-error', e);
-      });
+      model.addEventListener("model-loaded", () => console.log("model-loaded ✅"));
+      model.addEventListener("model-error", (e) => console.error("model-error ❌", e));
     </script>
   </body>
 </html>
