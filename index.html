@@ -3,178 +3,74 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>AR.js Camera Picker (Hiro)</title>
+    <title>AR.js (Hiro) – Letterbox statt Zoom</title>
 
-    <!-- A-Frame -->
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-    <!-- AR.js for A-Frame -->
     <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js/aframe/build/aframe-ar.js"></script>
 
     <style>
-      html, body { margin: 0; height: 100%; overflow: hidden; font-family: system-ui, sans-serif; }
-      #ui {
-        position: fixed; inset: 0; display: grid; place-items: center;
-        background: #0b0b0b; color: #fff; z-index: 9999;
-        padding: 20px;
-      }
-      #panel {
-        width: min(520px, 92vw);
-        border: 1px solid rgba(255,255,255,0.15);
-        border-radius: 14px;
-        padding: 16px;
-        background: rgba(255,255,255,0.06);
-        backdrop-filter: blur(10px);
-      }
-      #panel h1 { font-size: 18px; margin: 0 0 10px; }
-      #panel p { font-size: 14px; opacity: 0.9; line-height: 1.35; }
-      #row { display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
-      select, button {
-        font-size: 14px; padding: 10px 12px; border-radius: 10px; border: 0;
-      }
-      select { flex: 1; min-width: 220px; }
-      button { cursor: pointer; }
+      html, body { margin: 0; height: 100%; overflow: hidden; background: #000; }
 
-      /* Reduce "cropping-zoom" feeling (may add letterboxing) */
-      video { object-fit: contain !important; }
+      /* AR.js setzt beim Resize Inline-Styles (width/height/margins). Mit !important überschreiben. */
+      #arjs-video {
+        width: 100% !important;
+        height: 100% !important;
+        left: 0 !important;
+        top: 0 !important;
+        margin-left: 0 !important;
+        margin-top: 0 !important;
+        object-fit: contain !important; /* <-- key: no crop, may add black bars */
+      }
 
-      #ar-container { width: 100vw; height: 100vh; }
+      /* Canvas ebenfalls “sauber” auf Fullscreen halten */
+      .a-canvas {
+        width: 100% !important;
+        height: 100% !important;
+        left: 0 !important;
+        top: 0 !important;
+      }
+
+      #hud {
+        position: fixed; top: 0; left: 0; right: 0;
+        padding: 10px; z-index: 9999;
+        background: rgba(0,0,0,.6); color: #fff;
+        font: 14px system-ui;
+      }
     </style>
   </head>
 
   <body>
-    <div id="ui">
-      <div id="panel">
-        <h1>AR starten</h1>
-        <p>
-          1) Tippe auf <b>Kamera erlauben</b><br>
-          2) Wähle die passende Rückkamera (oft „Back/Wide“)<br>
-          3) Tippe <b>AR starten</b> und halte den Hiro-Marker in die Kamera
-        </p>
+    <div id="hud">Status: Seite geladen…</div>
 
-        <div id="row">
-          <button id="btn-permission">Kamera erlauben</button>
-          <select id="cameraSelect" disabled>
-            <option>Erst Kamera erlauben…</option>
-          </select>
-          <button id="btn-start" disabled>AR starten</button>
-        </div>
+    <a-scene
+      embedded
+      vr-mode-ui="enabled:false"
+      renderer="colorManagement: true;"
+      arjs="sourceType: webcam; debugUIEnabled: false;
+            sourceWidth: 1280; sourceHeight: 720;
+            displayWidth: 1280; displayHeight: 720;"
+    >
+      <a-entity light="type: ambient; intensity: 1"></a-entity>
+      <a-entity light="type: directional; intensity: 0.8" position="1 2 1"></a-entity>
 
-        <p id="status" style="margin-top:10px; opacity:0.85;"></p>
-      </div>
-    </div>
+      <a-assets>
+        <a-asset-item id="m" src="model.glb"></a-asset-item>
+      </a-assets>
 
-    <div id="ar-container"></div>
+      <a-marker id="mk" preset="hiro" emitevents="true">
+        <a-box depth="0.4" height="0.4" width="0.4" position="0 0.2 0"></a-box>
+        <a-entity gltf-model="#m" position="0 0.05 0" scale="0.2 0.2 0.2"></a-entity>
+      </a-marker>
+
+      <a-entity camera></a-entity>
+    </a-scene>
 
     <script>
-      let selectedDeviceId = null;
+      const hud = document.getElementById("hud");
+      const marker = document.getElementById("mk");
 
-      // Monkey-patch getUserMedia so AR.js uses the selected camera deviceId.
-      const originalGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
-      navigator.mediaDevices.getUserMedia = async (constraints) => {
-        try {
-          if (constraints && constraints.video && selectedDeviceId) {
-            const v = (typeof constraints.video === "boolean") ? {} : constraints.video;
-            constraints = {
-              ...constraints,
-              video: {
-                ...v,
-                deviceId: { exact: selectedDeviceId }
-              }
-            };
-          }
-        } catch (_) {}
-        const stream = await originalGetUserMedia(constraints);
-        return stream;
-      };
-
-      const btnPermission = document.getElementById("btn-permission");
-      const btnStart = document.getElementById("btn-start");
-      const cameraSelect = document.getElementById("cameraSelect");
-      const statusEl = document.getElementById("status");
-      const arContainer = document.getElementById("ar-container");
-      const ui = document.getElementById("ui");
-
-      async function requestPermissionAndListCameras() {
-        statusEl.textContent = "Frage Kamera-Berechtigung an…";
-        // Request a stream once so device labels become available in enumerateDevices()
-        const tmpStream = await originalGetUserMedia({
-          video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } },
-          audio: false
-        });
-
-        // Stop immediately; we only needed permission/labels.
-        tmpStream.getTracks().forEach(t => t.stop());
-
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        const cams = devices.filter(d => d.kind === "videoinput");
-
-        cameraSelect.innerHTML = "";
-        cams.forEach((cam, idx) => {
-          const opt = document.createElement("option");
-          opt.value = cam.deviceId;
-          opt.textContent = cam.label || `Kamera ${idx + 1}`;
-          cameraSelect.appendChild(opt);
-        });
-
-        cameraSelect.disabled = cams.length === 0;
-        btnStart.disabled = cams.length === 0;
-
-        // Preselect a likely back camera (heuristic).
-        const preferred = cams.find(c => /back|rear|environment|wide/i.test(c.label || ""));
-        if (preferred) cameraSelect.value = preferred.deviceId;
-
-        selectedDeviceId = cameraSelect.value;
-        statusEl.textContent = cams.length
-          ? "Kameras gefunden. Wähle ggf. eine andere Kamera (Wide) und starte AR."
-          : "Keine Kameras gefunden.";
-      }
-
-      function startARScene() {
-        selectedDeviceId = cameraSelect.value;
-
-        // Create the AR.js scene only now (so it uses the chosen camera).
-        arContainer.innerHTML = `
-          <a-scene
-            embedded
-            vr-mode-ui="enabled:false"
-            renderer="colorManagement: true;"
-            arjs="sourceType: webcam; facingMode: environment; debugUIEnabled: false; trackingMethod: best;"
-          >
-            <a-entity light="type: ambient; intensity: 1"></a-entity>
-            <a-entity light="type: directional; intensity: 0.8" position="1 2 1"></a-entity>
-
-            <a-assets>
-              <a-asset-item id="m" src="model.glb"></a-asset-item>
-            </a-assets>
-
-            <a-marker preset="hiro">
-              <a-box depth="0.4" height="0.4" width="0.4" position="0 0.2 0"></a-box>
-              <a-entity gltf-model="#m" position="0 0.05 0" scale="0.2 0.2 0.2"></a-entity>
-            </a-marker>
-
-            <a-entity camera></a-entity>
-          </a-scene>
-        `;
-
-        ui.style.display = "none";
-      }
-
-      btnPermission.addEventListener("click", async () => {
-        try {
-          await requestPermissionAndListCameras();
-        } catch (e) {
-          console.error(e);
-          statusEl.textContent = "Kamera konnte nicht gestartet werden (Permission/HTTPS/Browser?).";
-        }
-      });
-
-      cameraSelect.addEventListener("change", () => {
-        selectedDeviceId = cameraSelect.value;
-      });
-
-      btnStart.addEventListener("click", () => {
-        startARScene();
-      });
+      marker.addEventListener("markerFound", () => (hud.textContent = "Status: Hiro erkannt ✅"));
+      marker.addEventListener("markerLost",  () => (hud.textContent = "Status: Hiro nicht im Bild…"));
     </script>
   </body>
 </html>
